@@ -3,24 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WEB_ESP | Mobile Optimized v2.0</title>
+    <title>WEB_ESP | Mobile Fix v2.2</title>
     <style>
         body { margin: 0; padding: 0; background: #050505; color: #00ff00; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
         .container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        #status-bar { position: fixed; top: 20px; left: 20px; padding: 15px; background: rgba(5, 5, 5, 0.9); border: 1px solid #00ffaa; box-shadow: 0 0 15px rgba(0, 255, 170, 0.4); z-index: 100; font-size: 12px; line-height: 1.5; max-width: 80%; }
+        #status-bar { position: fixed; top: 20px; left: 20px; padding: 15px; background: rgba(5, 5, 5, 0.9); border: 1px solid #00ffaa; box-shadow: 0 0 15px rgba(0, 255, 170, 0.4); z-index: 100; font-size: 11px; line-height: 1.6; max-width: 85%; }
         .hud-title { color: #00ffaa; font-weight: bold; margin-bottom: 5px; text-shadow: 0 0 5px #00ffaa; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models/coco-ssd"></script>
+    
+    <script src="https://unpkg.com/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 </head>
 <body>
 
 <div id="status-bar">
-    <div class="hud-title">▼ MOBILE INJECTION v2.0</div>
-    [ CORE_STATUS ] <span id="core-status" style="color: yellow;">STARTING...</span><br>
-    [ CAM_STATUS  ] <span id="cam-status">WAITING...</span><br>
-    [ LOG_DETAILS ] <span id="log-details" style="color: #aaa;">Initializing systems...</span>
+    <div class="hud-title">▼ BYPASS INJECTION v2.2</div>
+    [ AI_CORE   ] <span id="core-status" style="color: yellow;">CONNECTING...</span><br>
+    [ WEBCAM    ] <span id="cam-status">WAITING...</span><br>
+    [ LOG_INFO  ] <span id="log-details" style="color: #aaa;">Bypassing CDN restrictions...</span>
 </div>
 
 <div class="container">
@@ -33,7 +34,6 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Elemen status untuk mempermudah debugging di HP
     const coreStatus = document.getElementById('core-status');
     const camStatus = document.getElementById('cam-status');
     const logDetails = document.getElementById('log-details');
@@ -48,19 +48,23 @@
     const KNOWN_HEIGHT_CM = 170; 
     const FOCAL_LENGTH = 380;    
 
-    // 1. Setup Kamera dengan konfigurasi khusus Mobile (Facing Mode: User)
     async function setupWebcam() {
-        camStatus.innerHTML = '<span style="color:yellow">REQUESTING PERMISSION...</span>';
+        camStatus.innerHTML = '<span style="color:yellow">PROMPTING...</span>';
         
+        // Memastikan API mediaDevices tersedia
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            camStatus.innerHTML = '<span style="color:red">NOT SUPPORTED</span>';
-            logDetails.innerHTML = 'Browser tidak mendukung getUserMedia API.';
-            return false;
+            // Coba fallback jadul jika di peramban in-app (seperti browser Facebook/IG/Tiktok)
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+            if (!navigator.getUserMedia) {
+                camStatus.innerHTML = '<span style="color:red">UNSUPPORTED_BROWSER</span>';
+                logDetails.innerHTML = 'Gunakan aplikasi Google Chrome asli, jangan buka lewat aplikasi lain.';
+                return false;
+            }
         }
 
         const constraints = {
             video: {
-                facingMode: "user", // Memaksa pakai kamera depan HP
+                facingMode: "user",
                 width: { ideal: 640 },
                 height: { ideal: 480 }
             },
@@ -74,14 +78,14 @@
             return new Promise((resolve) => {
                 video.onloadedmetadata = () => {
                     resizeCanvas();
-                    camStatus.innerHTML = '<span style="color:#00ff55">ONLINE</span>';
+                    camStatus.innerHTML = '<span style="color:#00ff55">CONNECTED</span>';
                     resolve(true);
                 };
             });
         } catch (e) {
             console.error(e);
-            camStatus.innerHTML = '<span style="color:red">PERMISSION_DENIED</span>';
-            logDetails.innerHTML = 'Buka pengaturan browser, izinkan akses kamera untuk situs ini.';
+            camStatus.innerHTML = '<span style="color:red">BLOCKED</span>';
+            logDetails.innerHTML = 'Klik ikon opsi/gembok di atas URL, lalu Izinkan Akses Kamera.';
             return false;
         }
     }
@@ -92,9 +96,8 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // 2. Logika Radar
     function drawRadar(predictions) {
-        const radarRadius = 65; // Sedikit dikecilkan agar pas di layar HP
+        const radarRadius = 60; 
         const radarX = canvas.width - radarRadius - 20;
         const radarY = radarRadius + 20;
 
@@ -111,10 +114,6 @@
         ctx.moveTo(radarX - radarRadius, radarY); ctx.lineTo(radarX + radarRadius, radarY);
         ctx.moveTo(radarX, radarY - radarRadius); ctx.lineTo(radarX, radarY + radarRadius);
         ctx.stroke();
-
-        ctx.fillStyle = COLOR_RADAR_GRID;
-        ctx.font = '9px "Courier New"';
-        ctx.fillText("N", radarX - 3, radarY - radarRadius + 12);
 
         predictions.forEach((prediction) => {
             if (prediction.class === 'person') {
@@ -146,7 +145,6 @@
         });
     }
 
-    // 3. Loop Deteksi Utama
     async function detectFrame() {
         if (!model) return;
 
@@ -172,7 +170,7 @@
                     const distanceInCm = (KNOWN_HEIGHT_CM * FOCAL_LENGTH) / height;
                     const distanceInMeters = distanceInCm / 100;
 
-                    // SNAPLINE
+                    // GARIS SNAPLINE
                     ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -180,7 +178,7 @@
                     ctx.lineTo(flippedX + (boxW / 2), boxY + (boxH / 2)); 
                     ctx.stroke();
 
-                    // CORNER BOX ESP
+                    // ESP BOX
                     ctx.strokeStyle = COLOR_ESP;
                     ctx.lineWidth = 2;
                     const cSize = Math.min(boxW, boxH) * 0.25; 
@@ -192,12 +190,12 @@
                     ctx.moveTo(flippedX + boxW - cSize, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH - cSize);
                     ctx.stroke();
 
-                    // TEXT HUD
+                    // TEKS INFORMASI TARGET
                     ctx.font = FONT_SETTINGS;
                     ctx.save();
                     ctx.scale(-1, 1);
                     
-                    const infoText = `TRGT_P${index + 1} [${distanceInMeters.toFixed(2)}M]`;
+                    const infoText = `TARGET_P${index + 1} [${distanceInMeters.toFixed(2)}M]`;
                     const textWidth = ctx.measureText(infoText).width;
                     
                     ctx.fillStyle = 'rgba(5, 5, 5, 0.8)';
@@ -210,33 +208,34 @@
                 }
             });
         } catch (err) {
-            console.error("Loop error:", err);
+            console.error(err);
         }
 
         requestAnimationFrame(detectFrame);
     }
 
-    // 4. Inisialisasi
     async function init() {
-        logDetails.innerHTML = 'Loading COCO-SSD AI Model from CDN...';
+        logDetails.innerHTML = 'Downloading model files via Unpkg Secure...';
         try {
-            model = await cocoSsd.load();
-            coreStatus.innerHTML = '<span style="color:#00ff55">ACTIVE</span>';
-            logDetails.innerHTML = 'AI Model loaded successfully.';
+            // Memaksa load model cocoSsd
+            model = await cocoSsd.load({ base: 'mobilenet_v2' }); // Menggunakan versi lite mobilenet agar ringan di HP
+            coreStatus.innerHTML = '<span style="color:#00ff55">SUCCESS</span>';
+            logDetails.innerHTML = 'Bypassed. Model injected successfully.';
             
             const camReady = await setupWebcam();
             if (camReady) {
-                logDetails.innerHTML = 'All systems nominal. Tracking targets.';
+                logDetails.innerHTML = 'Running radar mapping systems.';
                 detectFrame();
             }
         } catch (e) {
-            console.error("Init Error:", e);
-            coreStatus.innerHTML = '<span style="color:red">FAILED</span>';
-            logDetails.innerHTML = 'Gagal memuat AI Model (Koneksi CDN diblokir/terputus).';
+            console.error(e);
+            coreStatus.innerHTML = '<span style="color:red">BYPASS_FAILED</span>';
+            logDetails.innerHTML = 'Sinyal / Jaringan memblokir koneksi database AI Google.';
         }
     }
 
-    init();
+    // Eksekusi setelah seluruh dokumen siap
+    window.onload = init;
 </script>
 </body>
 </html>
