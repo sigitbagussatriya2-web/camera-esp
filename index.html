@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WEB_ESP | Close Range Auto-Lock v1.8</title>
+    <title>WEB_ESP | Mobile Optimized v2.0</title>
     <style>
         body { margin: 0; padding: 0; background: #050505; color: #00ff00; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
         .container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); /* Efek cermin */ }
-        #status-bar { position: fixed; top: 20px; left: 20px; padding: 15px; background: rgba(5, 5, 5, 0.9); border: 1px solid #00ffaa; box-shadow: 0 0 15px rgba(0, 255, 170, 0.4); z-index: 100; font-size: 13px; line-height: 1.5; }
+        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #status-bar { position: fixed; top: 20px; left: 20px; padding: 15px; background: rgba(5, 5, 5, 0.9); border: 1px solid #00ffaa; box-shadow: 0 0 15px rgba(0, 255, 170, 0.4); z-index: 100; font-size: 12px; line-height: 1.5; max-width: 80%; }
         .hud-title { color: #00ffaa; font-weight: bold; margin-bottom: 5px; text-shadow: 0 0 5px #00ffaa; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -17,15 +17,14 @@
 <body>
 
 <div id="status-bar">
-    <div class="hud-title">▼ CLOSE-RANGE INJECTION v1.8</div>
-    [ ESP STATUS ] <span style="color:#00ffaa">RUNNING</span><br>
-    [ AUTO-LOCK  ] AMBIENT_MODE_ON<br>
-    [ DETECTOR   ] OPTIMIZED FOR CLOSE DISTANCE<br>
-    [ RADAR_PING ] NEARBY SENSITIVITY HIGH
+    <div class="hud-title">▼ MOBILE INJECTION v2.0</div>
+    [ CORE_STATUS ] <span id="core-status" style="color: yellow;">STARTING...</span><br>
+    [ CAM_STATUS  ] <span id="cam-status">WAITING...</span><br>
+    [ LOG_DETAILS ] <span id="log-details" style="color: #aaa;">Initializing systems...</span>
 </div>
 
 <div class="container">
-    <video id="webcam" autoplay muted playsinline></video>
+    <video id="webcam" autoplay muted playsinline webkit-playsinline></video>
     <canvas id="canvas"></canvas>
 </div>
 
@@ -33,41 +32,57 @@
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const statusBar = document.getElementById('status-bar');
+    
+    // Elemen status untuk mempermudah debugging di HP
+    const coreStatus = document.getElementById('core-status');
+    const camStatus = document.getElementById('cam-status');
+    const logDetails = document.getElementById('log-details');
+    
     let model;
 
-    // --- Konfigurasi Estetika ---
-    const COLOR_ESP = '#00ffaa'; // Hijau Cyan Neon agar lebih kontras di jarak dekat
+    const COLOR_ESP = '#00ffaa'; 
     const COLOR_RADAR_BG = 'rgba(5, 15, 10, 0.85)';
     const COLOR_RADAR_GRID = '#00ffaa';
     const FONT_SETTINGS = 'bold 14px "Courier New"';
 
-    // --- 🛠️ Optimasi Deteksi Jarak Dekat ---
-    const KNOWN_HEIGHT_CM = 170; // Tinggi rata-rata target
-    const FOCAL_LENGTH = 380;    // DIURANGI (Sebelumnya 600) agar deteksi jarak dekat/wajah langsung terbaca akurat (~0.3m - 2m)
+    const KNOWN_HEIGHT_CM = 170; 
+    const FOCAL_LENGTH = 380;    
 
-    // 1. Setup Kamera
+    // 1. Setup Kamera dengan konfigurasi khusus Mobile (Facing Mode: User)
     async function setupWebcam() {
+        camStatus.innerHTML = '<span style="color:yellow">REQUESTING PERMISSION...</span>';
+        
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert('Peramban tidak mendukung akses kamera.');
-            return;
+            camStatus.innerHTML = '<span style="color:red">NOT SUPPORTED</span>';
+            logDetails.innerHTML = 'Browser tidak mendukung getUserMedia API.';
+            return false;
         }
+
+        const constraints = {
+            video: {
+                facingMode: "user", // Memaksa pakai kamera depan HP
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        };
+
         try {
-            // Meminta resolusi standar agar pemrosesan AI jauh lebih cepat & responsif langsung di depan kamera
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 640, height: 480 }, 
-                audio: false 
-            });
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
+            
             return new Promise((resolve) => {
                 video.onloadedmetadata = () => {
                     resizeCanvas();
-                    resolve();
+                    camStatus.innerHTML = '<span style="color:#00ff55">ONLINE</span>';
+                    resolve(true);
                 };
             });
         } catch (e) {
             console.error(e);
-            statusBar.innerHTML = '<span style="color:red">[ ERR ] WEBCAM ACCESS DENIED</span>';
+            camStatus.innerHTML = '<span style="color:red">PERMISSION_DENIED</span>';
+            logDetails.innerHTML = 'Buka pengaturan browser, izinkan akses kamera untuk situs ini.';
+            return false;
         }
     }
 
@@ -77,10 +92,10 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // 2. Logika Radar Jarak Dekat
+    // 2. Logika Radar
     function drawRadar(predictions) {
-        const radarRadius = 75;
-        const radarX = canvas.width - radarRadius - 30;
+        const radarRadius = 65; // Sedikit dikecilkan agar pas di layar HP
+        const radarX = canvas.width - radarRadius - 20;
         const radarY = radarRadius + 20;
 
         ctx.fillStyle = COLOR_RADAR_BG;
@@ -97,24 +112,9 @@
         ctx.moveTo(radarX, radarY - radarRadius); ctx.lineTo(radarX, radarY + radarRadius);
         ctx.stroke();
 
-        // Lingkaran Jarak Dalam (Dioptimalkan untuk deteksi jarak dekat)
-        ctx.beginPath();
-        ctx.arc(radarX, radarY, radarRadius * 0.4, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Titik Posisi Kamera (Self)
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(radarX, radarY - 5);
-        ctx.lineTo(radarX - 3, radarY + 4);
-        ctx.lineTo(radarX + 3, radarY + 4);
-        ctx.closePath();
-        ctx.fill();
-
         ctx.fillStyle = COLOR_RADAR_GRID;
         ctx.font = '9px "Courier New"';
         ctx.fillText("N", radarX - 3, radarY - radarRadius + 12);
-        ctx.fillText("RADAR: PROXIMITY", radarX - radarRadius + 5, radarY + radarRadius + 15);
 
         predictions.forEach((prediction) => {
             if (prediction.class === 'person') {
@@ -129,18 +129,17 @@
                 const screenCenterX = canvas.width / 2;
                 const targetRelativeX = (flippedX + (width * scaleX) / 2) - screenCenterX;
 
-                // 🛠️ Maksimal jangkauan radar dipersempit ke 3 meter agar pergerakan jarak dekat terlihat sensitif
                 const maxRangeMeters = 3; 
                 const radarRangeFactor = radarRadius / maxRangeMeters;
                 
-                let blipX = radarX + (targetRelativeX * 0.2); 
+                let blipX = radarX + (targetRelativeX * 0.15); 
                 let blipY = radarY - (distanceInMeters * radarRangeFactor) + 25; 
 
                 const distFromRadarCenter = Math.hypot(blipX - radarX, blipY - radarY);
                 if (distFromRadarCenter < radarRadius - 4) {
                     ctx.fillStyle = '#ff3333'; 
                     ctx.beginPath();
-                    ctx.arc(blipX, blipY, 4.5, 0, Math.PI * 2);
+                    ctx.arc(blipX, blipY, 4, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
@@ -151,85 +150,89 @@
     async function detectFrame() {
         if (!model) return;
 
-        const predictions = await model.detect(video);
-        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        try {
+            const predictions = await model.detect(video);
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
-        drawRadar(predictions);
+            drawRadar(predictions);
 
-        const scaleX = canvas.width / video.videoWidth;
-        const scaleY = canvas.height / video.videoHeight;
+            const scaleX = canvas.width / video.videoWidth;
+            const scaleY = canvas.height / video.videoHeight;
 
-        predictions.forEach((prediction, index) => {
-            if (prediction.class === 'person') {
-                const [x, y, width, height] = prediction.bbox;
+            predictions.forEach((prediction, index) => {
+                if (prediction.class === 'person') {
+                    const [x, y, width, height] = prediction.bbox;
 
-                const boxX = x * scaleX;
-                const boxY = y * scaleY;
-                const boxW = width * scaleX;
-                const boxH = height * scaleY;
-                const flippedX = canvas.width - (boxX + boxW);
+                    const boxX = x * scaleX;
+                    const boxY = y * scaleY;
+                    const boxW = width * scaleX;
+                    const boxH = height * scaleY;
+                    const flippedX = canvas.width - (boxX + boxW);
 
-                // Kalkulasi Jarak Dekat
-                const distanceInCm = (KNOWN_HEIGHT_CM * FOCAL_LENGTH) / height;
-                const distanceInMeters = (distanceInCm / 100).toFixed(2);
+                    const distanceInCm = (KNOWN_HEIGHT_CM * FOCAL_LENGTH) / height;
+                    const distanceInMeters = distanceInCm / 100;
 
-                // --- 1. SNAPLINE (Garis Pengunci Langsung ke Tengah Objek) ---
-                ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(canvas.width / 2, canvas.height); 
-                ctx.lineTo(flippedX + (boxW / 2), boxY + (boxH / 2)); // Mengunci ke dada/tengah tubuh target agar responsif saat dekat
-                ctx.stroke();
+                    // SNAPLINE
+                    ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(canvas.width / 2, canvas.height); 
+                    ctx.lineTo(flippedX + (boxW / 2), boxY + (boxH / 2)); 
+                    ctx.stroke();
 
-                // --- 2. CORNER BOX ESP ---
-                ctx.strokeStyle = COLOR_ESP;
-                ctx.lineWidth = 2.5;
-                const cSize = Math.min(boxW, boxH) * 0.25; 
+                    // CORNER BOX ESP
+                    ctx.strokeStyle = COLOR_ESP;
+                    ctx.lineWidth = 2;
+                    const cSize = Math.min(boxW, boxH) * 0.25; 
 
-                ctx.beginPath();
-                ctx.moveTo(flippedX, boxY + cSize); ctx.lineTo(flippedX, boxY); ctx.lineTo(flippedX + cSize, boxY);
-                ctx.moveTo(flippedX + boxW - cSize, boxY); ctx.lineTo(flippedX + boxW, boxY); ctx.lineTo(flippedX + boxW, boxY + cSize);
-                ctx.moveTo(flippedX, boxY + boxH - cSize); ctx.lineTo(flippedX, boxY + boxH); ctx.lineTo(flippedX + cSize, boxY + boxH);
-                ctx.moveTo(flippedX + boxW - cSize, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH - cSize);
-                ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(flippedX, boxY + cSize); ctx.lineTo(flippedX, boxY); ctx.lineTo(flippedX + cSize, boxY);
+                    ctx.moveTo(flippedX + boxW - cSize, boxY); ctx.lineTo(flippedX + boxW, boxY); ctx.lineTo(flippedX + boxW, boxY + cSize);
+                    ctx.moveTo(flippedX, boxY + boxH - cSize); ctx.lineTo(flippedX, boxY + boxH); ctx.lineTo(flippedX + cSize, boxY + boxH);
+                    ctx.moveTo(flippedX + boxW - cSize, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH); ctx.lineTo(flippedX + boxW, boxY + boxH - cSize);
+                    ctx.stroke();
 
-                // --- 3. INFORMASI HUD TARGET ---
-                ctx.font = FONT_SETTINGS;
-                ctx.save();
-                ctx.scale(-1, 1);
-                
-                const infoText = `LOCK_ON_P${index + 1} [DST: ${distanceInMeters}M]`;
-                const textWidth = ctx.measureText(infoText).width;
-                
-                ctx.fillStyle = 'rgba(5, 5, 5, 0.8)';
-                ctx.fillRect(-(flippedX + boxW), boxY - 24, textWidth + 10, 20);
+                    // TEXT HUD
+                    ctx.font = FONT_SETTINGS;
+                    ctx.save();
+                    ctx.scale(-1, 1);
+                    
+                    const infoText = `TRGT_P${index + 1} [${distanceInMeters.toFixed(2)}M]`;
+                    const textWidth = ctx.measureText(infoText).width;
+                    
+                    ctx.fillStyle = 'rgba(5, 5, 5, 0.8)';
+                    ctx.fillRect(-(flippedX + boxW), boxY - 24, textWidth + 10, 20);
 
-                ctx.fillStyle = '#ffffff';
-                ctx.fillText(infoText, -(flippedX + boxW) + 5, boxY - 10);
-                
-                ctx.restore();
-            }
-        });
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(infoText, -(flippedX + boxW) + 5, boxY - 10);
+                    
+                    ctx.restore();
+                }
+            });
+        } catch (err) {
+            console.error("Loop error:", err);
+        }
 
         requestAnimationFrame(detectFrame);
     }
 
     // 4. Inisialisasi
     async function init() {
+        logDetails.innerHTML = 'Loading COCO-SSD AI Model from CDN...';
         try {
             model = await cocoSsd.load();
-            statusBar.innerHTML = `
-                <div class="hud-title">▼ CLOSE-RANGE INJECTION v1.8</div>
-                [ ESP STATUS ] <span style="color:#00ffaa">ACTIVE</span><br>
-                [ AUTO-LOCK  ] <span style="color:#00ffaa">BYPASS_SUCCESS</span><br>
-                [ DETECTOR   ] SYSTEM_READY<br>
-                [ RADAR_PING ] IN-RANGE DETECTING
-            `;
-            await setupWebcam();
-            detectFrame();
+            coreStatus.innerHTML = '<span style="color:#00ff55">ACTIVE</span>';
+            logDetails.innerHTML = 'AI Model loaded successfully.';
+            
+            const camReady = await setupWebcam();
+            if (camReady) {
+                logDetails.innerHTML = 'All systems nominal. Tracking targets.';
+                detectFrame();
+            }
         } catch (e) {
-            console.error(e);
-            statusBar.innerHTML = '<span style="color:red">[ ERR ] INJECTION FAILED</span>';
+            console.error("Init Error:", e);
+            coreStatus.innerHTML = '<span style="color:red">FAILED</span>';
+            logDetails.innerHTML = 'Gagal memuat AI Model (Koneksi CDN diblokir/terputus).';
         }
     }
 
